@@ -565,7 +565,17 @@ function renderLog(){
     if(badge) badge.textContent='';
     return;
   }
-  el.innerHTML=changeLog.map(c=>`<div class="citem ${c.type}"><span class="ctype">${c.type.toUpperCase()}</span><span class="cdesc">${c.desc}</span></div>`).join('');
+  el.innerHTML=changeLog.map((c,i)=>`
+    <div class="citem ${c.type}" style="align-items:flex-start;">
+      <span class="ctype" style="padding-top:1px">${c.type.toUpperCase()}</span>
+      <span class="cdesc">${c.desc}</span>
+      <button onclick="removeChange(${i})" title="Remove this change"
+        style="margin-left:auto;flex-shrink:0;background:none;border:1px solid var(--border2);border-radius:4px;
+               color:var(--text3);cursor:pointer;font-size:11px;padding:2px 8px;line-height:1.4;
+               transition:all .15s;font-family:var(--mono);"
+        onmouseover="this.style.borderColor='var(--danger)';this.style.color='var(--danger)'"
+        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">✕</button>
+    </div>`).join('');
   const badge=document.getElementById('pending-count-badge');
   if(badge) badge.textContent='('+changeLog.length+')';
 }
@@ -592,7 +602,7 @@ function applyAdjust(){
   if(isNaN(val)||val<0||val>100){showToast('Enter a valid allocation (0–100)','err');return;}
   const s=propPrimaries.find(x=>x.symbol===sym);if(!s)return;
   const old=s.alloc; s.alloc=+val.toFixed(4);
-  changeLog.push({type:'mod',desc:`<strong>${sym}</strong> allocation: ${fmt(old)}% → ${fmt(s.alloc)}%`});
+  changeLog.push({type:'mod',_symbol:sym,_alloc:s.alloc,desc:`<strong>${sym}</strong> allocation: ${fmt(old)}% → ${fmt(s.alloc)}%`});
   document.getElementById('adj-val').value='';
   afterChange();
 }
@@ -603,7 +613,7 @@ function applyBand(){
   if(isNaN(val)||val<0){showToast('Enter a valid band value','err');return;}
   const s=propPrimaries.find(x=>x.symbol===sym);if(!s)return;
   const old=s.fixBand; s.fixBand=val;
-  changeLog.push({type:'band',desc:`<strong>${sym}</strong> fix band: ${old}% → ${val}%`});
+  changeLog.push({type:'band',_symbol:sym,_band:val,desc:`<strong>${sym}</strong> fix band: ${old}% → ${val}%`});
   document.getElementById('band-val').value='';
   afterChange();
 }
@@ -635,8 +645,9 @@ function applyAdd(){
       tmpl[k]='';
   });
 
-  propPrimaries.push({_raw:tmpl,symbol:sym,rank,alloc:+alloc.toFixed(4),fixBand:isNaN(band)?null:band,buyPri,sellPri});
-  changeLog.push({type:'add',desc:`Added <strong>${sym}</strong> at ${fmt(alloc)}%${!isNaN(band)?' (band ±'+band+'%)':''}`});
+  const newEntry={_raw:tmpl,symbol:sym,rank,alloc:+alloc.toFixed(4),fixBand:isNaN(band)?null:band,buyPri,sellPri};
+  propPrimaries.push(newEntry);
+  changeLog.push({type:'add',_symbol:sym,_entry:JSON.parse(JSON.stringify(newEntry)),desc:`Added <strong>${sym}</strong> at ${fmt(alloc)}%${!isNaN(band)?' (band ±'+band+'%)':''}`});
   ['add-sym','add-rank','add-alloc','add-band'].forEach(id=>document.getElementById(id).value='');
   afterChange();
 }
@@ -646,7 +657,7 @@ function applyRemove(){
   const idx=propPrimaries.findIndex(s=>s.symbol===sym);
   if(idx<0)return;
   propPrimaries.splice(idx,1);
-  changeLog.push({type:'rem',desc:`Removed <strong>${sym}</strong> (and its equivalents)`});
+  changeLog.push({type:'rem',_symbol:sym,desc:`Removed <strong>${sym}</strong> (and its equivalents)`});
   afterChange();
 }
 
@@ -668,7 +679,7 @@ function applySwap(){
   }
   const old=s.symbol; s.symbol=toSym;
   if(s._raw&&models[activeId].C.symbol)s._raw[models[activeId].C.symbol]=toSym;
-  changeLog.push({type:'swap',desc:`Swapped <strong>${old}</strong> → <strong>${toSym}</strong>${inherit?' (inherited weights)':' (new weights)'}`});
+  changeLog.push({type:'swap',_fromSymbol:old,_toSymbol:toSym,_alloc:s.alloc,_band:s.fixBand,desc:`Swapped <strong>${old}</strong> → <strong>${toSym}</strong>${inherit?' (inherited weights)':' (new weights)'}`});
   ['swap-sym','swap-alloc','swap-band','swap-rank'].forEach(id=>document.getElementById(id).value='');
   afterChange();
 }
@@ -685,13 +696,25 @@ function afterChange(){
   document.getElementById('pending-log-wrap').style.display = hasCh ? 'block' : 'none';
   document.getElementById('apply-bar').style.display = hasCh ? 'block' : 'none';
   const sub = document.getElementById('apply-sub');
-  if(sub) sub.textContent = changeLog.length + ' pending change' + (changeLog.length===1?'':'s') + ' — click to update the proposed model';
+  if(sub){
+    const runningTotal = propPrimaries.reduce((a,s)=>a+(s.alloc||0),0);
+    const diff = Math.abs(runningTotal-100);
+    const ok = diff < 0.001;
+    sub.innerHTML = changeLog.length + ' pending change' + (changeLog.length===1?'':'s')
+      + ' &nbsp;·&nbsp; Current total: <strong style="color:'+(ok?'var(--accent2)':'var(--warn)')+'">'+fmt(runningTotal)+'%</strong>'
+      + (ok ? ' ✓' : ' &nbsp;<span style="color:var(--warn)">must equal 100%</span>');
+  }
   // Update pane badge
   document.getElementById('prop-count').textContent = changeLog.length + ' pending';
 }
 
 // ── EXPORT ──
 function exportXlsx(){
+  const total = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
+  if(Math.abs(total-100)>0.001){
+    showToast('Cannot export — total allocation is '+fmt(total)+'%, must be 100%','err');
+    return;
+  }
   const m=models[activeId];const C=m.C;
   const propSyms=new Set(propPrimaries.map(s=>s.symbol));
   const propMap={};propPrimaries.forEach(s=>{propMap[s.symbol]=s;});
@@ -789,11 +812,118 @@ function resetAll(){
 }
 
 
+// ── REMOVE SINGLE CHANGE ──
+function removeChange(idx){
+  // Remove the change from the log
+  changeLog.splice(idx, 1);
+
+  // Rebuild propPrimaries from scratch by replaying remaining changes
+  propPrimaries = JSON.parse(JSON.stringify(curPrimaries));
+
+  for(const c of changeLog){
+    if(c.type === 'mod'){
+      // parse symbol and new alloc from stored action data
+      const s = propPrimaries.find(x=>x.symbol===c._symbol);
+      if(s) s.alloc = c._alloc;
+    } else if(c.type === 'band'){
+      const s = propPrimaries.find(x=>x.symbol===c._symbol);
+      if(s) s.fixBand = c._band;
+    } else if(c.type === 'add'){
+      if(!propPrimaries.find(x=>x.symbol===c._symbol)){
+        propPrimaries.push(c._entry);
+      }
+    } else if(c.type === 'rem'){
+      const i = propPrimaries.findIndex(x=>x.symbol===c._symbol);
+      if(i>=0) propPrimaries.splice(i,1);
+    } else if(c.type === 'swap'){
+      const s = propPrimaries.find(x=>x.symbol===c._toSymbol);
+      if(!s){
+        // swap wasn't applied yet, apply from original
+        const orig = propPrimaries.find(x=>x.symbol===c._fromSymbol);
+        if(orig){
+          orig.symbol = c._toSymbol;
+          orig.alloc = c._alloc;
+          orig.fixBand = c._band;
+          if(orig._raw && models[activeId].C.symbol) orig._raw[models[activeId].C.symbol] = c._toSymbol;
+        }
+      }
+    }
+  }
+
+  renderLog();
+  populateSels();
+
+  const hasCh = changeLog.length > 0;
+  document.getElementById('pending-log-wrap').style.display = hasCh ? 'block' : 'none';
+  document.getElementById('apply-bar').style.display = hasCh ? 'block' : 'none';
+  if(!hasCh){
+    document.getElementById('prop-count').textContent = 'no pending changes';
+  } else {
+    const sub = document.getElementById('apply-sub');
+    if(sub) sub.textContent = changeLog.length + ' pending change' + (changeLog.length===1?'':'s') + ' — click to update the proposed model';
+    document.getElementById('prop-count').textContent = changeLog.length + ' pending';
+  }
+}
+
+
 // ── APPLY CHANGES ──
 function applyChanges(){
   if(!changeLog.length){ showToast('No pending changes to apply','err'); return; }
+
+  // ── TOTAL CHECK ──
+  const total = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
+  const diff = Math.abs(total - 100);
+  if(diff > 0.001){
+    showAllocationWarning(total);
+    return;
+  }
+
+  commitChanges();
+}
+
+function showAllocationWarning(proposedTotal){
+  const over = proposedTotal > 100;
+  const diffAmt = Math.abs(proposedTotal - 100).toFixed(2);
+  const existing = document.getElementById('alloc-warning');
+  if(existing) existing.remove();
+
+  const warning = document.createElement('div');
+  warning.id = 'alloc-warning';
+  warning.innerHTML = `
+    <div style="
+      background:#fff8f0;border:2px solid var(--warn);border-radius:8px;
+      padding:16px 18px;margin:14px 0;
+    ">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:20px;">⚠️</span>
+        <strong style="font-family:var(--sans);font-size:14px;color:#7a3a00;">
+          Total allocation is ${fmt(proposedTotal)}% — must equal exactly 100%
+        </strong>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:14px;">
+        Your proposed model is <strong style="color:var(--warn)">${over?'over':'under'} by ${diffAmt}%</strong>.
+        Please adjust your pending changes so the allocations sum to 100% before applying.
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn sm" onclick="document.getElementById('alloc-warning').remove()"
+          style="border-color:var(--warn);color:var(--warn);">
+          Go Back &amp; Fix
+        </button>
+      </div>
+    </div>`;
+
+  // Insert the warning above the apply button
+  const applyBar = document.getElementById('apply-bar');
+  applyBar.parentNode.insertBefore(warning, applyBar);
+  warning.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function commitChanges(){
   // The propPrimaries are already updated in real-time, just render them and update UI state
   renderProp();
+  // Remove any lingering warning
+  const warn = document.getElementById('alloc-warning');
+  if(warn) warn.remove();
   // Update proposed state badge
   const badge = document.getElementById('proposed-state-badge');
   if(badge){
@@ -827,6 +957,11 @@ function clearAllChanges(){
 }
 
 function printProposed(){
+  const total = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
+  if(Math.abs(total-100)>0.001){
+    showToast('Cannot print — total allocation is '+fmt(total)+'%, must be 100%','err');
+    return;
+  }
   // Build a print-friendly page in a new window
   const m = models[activeId];
   const rows = propPrimaries;
