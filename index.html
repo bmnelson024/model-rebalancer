@@ -66,7 +66,7 @@
   .wbf{height:100%;border-radius:2px;background:var(--gold);transition:width .35s;}
   .wv{font-size:12px;color:var(--text);min-width:34px;text-align:right;}
   .bv{color:var(--text2);font-size:11px;}
-  .tlh-alts{font-size:10px;color:var(--text3);}
+  .equiv-alts{font-size:10px;color:var(--text3);}
   .diff-up{color:var(--accent);}.diff-down{color:var(--danger);}.diff-zero{color:var(--text3);}.new-tag{color:var(--blue);font-size:10px;}
   .tfoot-row td{font-family:var(--sans);font-size:11px;font-weight:700;color:var(--text);padding-top:10px;border-top:2px solid var(--border2);}
   .tok{color:var(--accent);}.twarn{color:var(--warn);}
@@ -121,6 +121,47 @@
   .toast.show{display:block;}.toast.ok{border-color:#1a7a4c;color:#1a5c38;}.toast.err{border-color:var(--danger);color:#8b1a2a;}
   @keyframes slideUp{from{transform:translateY(8px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 
+
+  .equiv-col { transition: opacity 0.2s; }
+  .equiv-hidden .equiv-col { display: none; }
+  #equiv-th { white-space: nowrap; }
+
+  /* Apply button */
+  .btn.apply-btn {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    font-size: 13px;
+    padding: 12px 36px;
+    border-radius: 7px;
+    letter-spacing: 1px;
+    box-shadow: 0 3px 12px rgba(26,58,92,0.18);
+    transition: all .2s;
+  }
+  .btn.apply-btn:hover { background: #14305a; border-color: #14305a; box-shadow: 0 5px 18px rgba(26,58,92,0.28); }
+  .btn.apply-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+
+  /* Proposed table highlight */
+  #prop-table tbody tr.modified td { background: rgba(201,168,76,0.08); }
+  #prop-table tbody tr.added td { background: rgba(26,58,92,0.06); }
+
+  /* Print styles */
+  @media print {
+    header, #build-section, #apply-bar, .pane:first-child,
+    .pane-hdr, #no-model-msg, #scards, #cur-tbl-wrap { display: none !important; }
+    .app { display: block !important; }
+    .pane:last-child { border: none !important; }
+    .pane-body { padding: 0 !important; }
+    #proposed-section { display: block !important; }
+    body { background: white !important; font-size: 12px; }
+    .print-header { display: block !important; }
+    #prop-table { width: 100%; border-collapse: collapse; }
+    #prop-table th, #prop-table td { border: 1px solid #ccc; padding: 6px 10px; }
+    #prop-table thead th { background: #1a3a5c; color: white; }
+    .wbw { display: none; }
+    .wv { display: inline !important; }
+  }
+  .print-header { display: none; margin-bottom: 20px; }
   @media(max-width:900px){.app{grid-template-columns:1fr;}.pane{border-right:none;border-bottom:1px solid var(--border);}.sgrid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
@@ -155,13 +196,13 @@
         <p>
           Drop your <strong>SecuritySetDetail</strong> export here, or click to browse.<br>
           Supports <code>.xlsx</code> · <code>.xls</code> · <code>.csv</code> — multiple models in one file OK.<br>
-          All original columns &amp; TLH alternates are preserved on export.
+          All original columns &amp; equivalents are preserved on export.
         </p>
       </div>
 
       <div class="sgrid" id="scards" style="display:none">
         <div class="scard"><div class="clbl">Primary Holdings</div><div class="cval" id="sc-count">0</div></div>
-        <div class="scard"><div class="clbl">TLH Alternates</div><div class="cval" id="sc-tlh">0</div><div class="csub">tax-loss subs</div></div>
+        <div class="scard"><div class="clbl">Equivalents</div><div class="cval" id="sc-equiv">0</div><div class="csub">equivalent securities</div></div>
         <div class="scard"><div class="clbl">Total Alloc %</div><div class="cval" id="sc-total">0%</div><div class="csub" id="sc-note"></div></div>
         <div class="scard"><div class="clbl">Avg Fix Band</div><div class="cval" id="sc-band">—</div><div class="csub">±% tolerance</div></div>
       </div>
@@ -170,7 +211,7 @@
         <div class="twrap">
           <table>
             <thead><tr>
-              <th>Symbol</th><th>Rank</th><th>Alloc %</th><th>Fix Band %</th><th>TLH Alternates</th>
+              <th>Symbol</th><th>Alloc %</th><th>Fix Band %</th><th id="equiv-th" onclick="toggleEquiv()" style="cursor:pointer;user-select:none;">Equivalents <span id="equiv-toggle-icon">▾</span></th>
             </tr></thead>
             <tbody id="cur-tbody"></tbody>
             <tfoot id="cur-tfoot"></tfoot>
@@ -184,7 +225,7 @@
   <div class="pane">
     <div class="pane-hdr">
       <span class="pane-title">Proposed Changes</span>
-      <span class="pane-badge" id="prop-count">0 changes</span>
+      <span class="pane-badge" id="prop-count">no pending changes</span>
     </div>
     <div class="pane-body">
       <div id="no-model-msg" class="empty">
@@ -194,21 +235,17 @@
 
       <div id="prop-panel" style="display:none">
 
-        <div class="slbl">Pending Changes</div>
-        <div class="clist" id="clist">
-          <div style="font-size:11px;color:var(--text3);padding:5px 0;">No changes yet — use the actions below.</div>
-        </div>
+        <!-- STEP 1: BUILD CHANGES -->
+        <div id="build-section">
 
-        <hr class="divider">
-
-        <div class="slbl">Apply a Change</div>
-        <div class="atabs">
-          <button class="tbtn active" data-action="adjust" onclick="showAction('adjust')">Adjust Allocation</button>
-          <button class="tbtn" data-action="band" onclick="showAction('band')">Change Band</button>
-          <button class="tbtn" data-action="add" onclick="showAction('add')">Add Security</button>
-          <button class="tbtn" data-action="remove" onclick="showAction('remove')">Remove</button>
-          <button class="tbtn" data-action="swap" onclick="showAction('swap')">Swap</button>
-        </div>
+          <div class="slbl">Step 1 — Build Changes</div>
+          <div class="atabs">
+            <button class="tbtn active" data-action="adjust" onclick="showAction('adjust')">Adjust Allocation</button>
+            <button class="tbtn" data-action="band" onclick="showAction('band')">Change Band</button>
+            <button class="tbtn" data-action="add" onclick="showAction('add')">Add Security</button>
+            <button class="tbtn" data-action="remove" onclick="showAction('remove')">Remove</button>
+            <button class="tbtn" data-action="swap" onclick="showAction('swap')">Swap</button>
+          </div>
 
         <!-- ADJUST ALLOCATION -->
         <div class="aform" id="action-adjust">
@@ -218,7 +255,7 @@
           </div>
           <div class="brow">
             <button class="btn primary sm" onclick="applyAdjust()">Apply</button>
-            <span style="font-size:10px;color:var(--text3)">TLH alternates for this security are unaffected.</span>
+            <span style="font-size:10px;color:var(--text3)">equivalents for this security are unaffected.</span>
           </div>
         </div>
 
@@ -237,7 +274,7 @@
 
         <!-- ADD SECURITY -->
         <div class="aform" id="action-add" style="display:none">
-          <div class="ibanner"><strong>Note:</strong> New securities are added as primary holdings. TLH alternates can be set up in your system after import.</div>
+          <div class="ibanner"><strong>Note:</strong> New securities are added as primary holdings. equivalents can be set up in your system after import.</div>
           <div class="fg">
             <div class="frow"><label>Symbol</label><input type="text" id="add-sym" placeholder="e.g. AAPL" style="text-transform:uppercase"></div>
             <div class="frow"><label>Rank</label><input type="number" id="add-rank" step="0.5" min="0" placeholder="e.g. 2"></div>
@@ -262,7 +299,7 @@
           <div class="frow" style="margin-bottom:9px">
             <label>Primary Security to Remove</label>
             <select id="rem-ticker"></select>
-            <span class="inote">All TLH alternates for this security will also be excluded from the export.</span>
+            <span class="inote">All equivalents for this security will also be excluded from the export.</span>
           </div>
           <div class="brow"><button class="btn danger sm" onclick="applyRemove()">Remove</button></div>
         </div>
@@ -288,21 +325,52 @@
           </div>
           <div class="brow" style="margin-top:8px">
             <button class="btn primary sm" onclick="applySwap()">Swap</button>
-            <span style="font-size:10px;color:var(--text3)">Original TLH alternates are removed; add new ones post-import.</span>
+            <span style="font-size:10px;color:var(--text3)">Original equivalents are removed; add new equivalents post-import.</span>
           </div>
+        </div>
+
+
+        <!-- Pending change log inside build section -->
+        <div id="pending-log-wrap" style="margin-top:14px;display:none">
+          <div class="slbl">Pending Changes <span id="pending-count-badge" style="font-family:var(--mono);font-weight:400;color:var(--gold);font-size:10px;text-transform:none;letter-spacing:0;"></span></div>
+          <div class="clist" id="clist">
+            <div style="font-size:11px;color:var(--text3);padding:5px 0;">No changes yet.</div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
+            <button class="btn danger sm" onclick="clearAllChanges()">Clear All</button>
+          </div>
+        </div>
+
+        </div><!-- end build-section -->
+
+        <!-- APPLY BUTTON -->
+        <div id="apply-bar" style="display:none;margin:18px 0;text-align:center;">
+          <button class="btn apply-btn" onclick="applyChanges()">
+            Apply Changes →
+          </button>
+          <div style="font-size:10px;color:var(--text3);margin-top:6px;" id="apply-sub"></div>
         </div>
 
         <hr class="divider">
 
-        <div class="slbl">Proposed Holdings — Primary Only</div>
-        <div class="twrap">
-          <table>
-            <thead><tr>
-              <th>Symbol</th><th>Rank</th><th>Alloc %</th><th>Fix Band</th><th>Δ Alloc</th>
-            </tr></thead>
-            <tbody id="prop-tbody"></tbody>
-            <tfoot id="prop-tfoot"></tfoot>
-          </table>
+        <!-- STEP 2: PROPOSED MODEL VIEW -->
+        <div id="proposed-section">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <div class="slbl" style="border:none;padding:0;margin:0;">Step 2 — Proposed Model</div>
+            <div id="proposed-state-badge" style="font-size:10px;color:var(--text3);font-family:var(--mono);">matches current</div>
+            <div style="margin-left:auto;display:flex;gap:8px;">
+              <button class="btn sm" onclick="printProposed()" id="print-btn">Print / PDF</button>
+            </div>
+          </div>
+          <div class="twrap">
+            <table id="prop-table">
+              <thead><tr>
+                <th>Symbol</th><th>Alloc %</th><th>Fix Band</th><th>Δ vs Current</th>
+              </tr></thead>
+              <tbody id="prop-tbody"></tbody>
+              <tfoot id="prop-tfoot"></tfoot>
+            </table>
+          </div>
         </div>
 
       </div>
@@ -408,11 +476,13 @@ function loadModel(){
     .filter(r=>{
       const equivOf=String(r[C.equivOf]||'').trim();
       const alloc=String(r[C.alloc]||'').trim();
-      // Primary = no TLH equivalent AND has an allocation value
+      // Primary = no Equiv equivalent AND has an allocation value
       return !equivOf && alloc !== '' && alloc !== null;
     })
     .map(r=>({_raw:r,symbol:String(r[C.symbol]||'').trim().toUpperCase(),rank:pn(r[C.rank]),alloc:pn(r[C.alloc]),fixBand:pn(r[C.fixBand]),buyPri:String(r[C.buyPri]||'Default').trim(),sellPri:String(r[C.sellPri]||'Default').trim()}))
     .filter(r=>r.symbol);
+  // Sort by allocation descending
+  curPrimaries.sort((a,b)=>(b.alloc||0)-(a.alloc||0));
   propPrimaries=JSON.parse(JSON.stringify(curPrimaries));
   changeLog=[];
   renderAll();
@@ -427,31 +497,31 @@ function loadModel(){
 // ── RENDER ──
 function renderAll(){renderCur();renderProp();renderCards();renderLog();populateSels();}
 
-function tlhFor(sym){const m=models[activeId];const C=m.C;return m.rows.filter(r=>String(r[C.equivOf]||'').trim().toUpperCase()===sym);}
+function equivFor(sym){const m=models[activeId];const C=m.C;return m.rows.filter(r=>String(r[C.equivOf]||'').trim().toUpperCase()===sym);}
 
 function renderCur(){
   const tbody=document.getElementById('cur-tbody'),tfoot=document.getElementById('cur-tfoot');
   tbody.innerHTML=''; let total=0;
   for(const s of curPrimaries){
     total+=(s.alloc||0);
-    const alts=tlhFor(s.symbol);
+    const alts=equivFor(s.symbol);
     const altStr=alts.length?alts.map(a=>{const C=models[activeId].C;return String(a[C.symbol]||'').trim();}).join(', '):'';
     tbody.insertAdjacentHTML('beforeend',`<tr>
       <td><div class="ticker">${s.symbol}</div></td>
-      <td class="num">${s.rank!==null?s.rank:'—'}</td>
       <td class="num"><div class="wbw"><div class="wbb"><div class="wbf" style="width:${Math.min(100,(s.alloc||0)*2)}%"></div></div><span class="wv">${s.alloc!==null?fmt(s.alloc)+'%':'—'}</span></div></td>
       <td class="num bv">${s.fixBand!==null?'±'+s.fixBand+'%':'—'}</td>
-      <td class="tlh-alts">${altStr?'↔ '+altStr:''}</td>
+      <td class="equiv-col equiv-alts">${altStr?'↔ '+altStr:''}</td>
     </tr>`);
   }
-  const tlhN=models[activeId].rows.filter(r=>String(r[models[activeId].C.equivOf]||'').trim()!=='').length;
-  document.getElementById('cur-count').textContent=curPrimaries.length+' primaries, '+tlhN+' TLH';
-  tfoot.innerHTML=`<tr class="tfoot-row"><td>TOTAL</td><td></td><td class="num ${Math.abs(total-100)<.01?'tok':'twarn'}">${fmt(total)}%</td><td></td><td></td></tr>`;
+  const equivN=models[activeId].rows.filter(r=>String(r[models[activeId].C.equivOf]||'').trim()!=='').length;
+  document.getElementById('cur-count').textContent=curPrimaries.length+' primaries, '+equivN+' Equiv';
+  tfoot.innerHTML=`<tr class="tfoot-row"><td>TOTAL</td><td class="num ${Math.abs(total-100)<.01?'tok':'twarn'}">${fmt(total)}%</td><td></td><td class="equiv-col"></td></tr>`;
 }
 
 function renderProp(){
   const tbody=document.getElementById('prop-tbody'),tfoot=document.getElementById('prop-tfoot');
   tbody.innerHTML=''; let total=0;
+  propPrimaries.sort((a,b)=>(b.alloc||0)-(a.alloc||0));
   const omap={};curPrimaries.forEach(s=>{omap[s.symbol]=s;});
   for(const s of propPrimaries){
     total+=(s.alloc||0);
@@ -464,24 +534,23 @@ function renderProp(){
     else if(diff!==null&&Math.abs(diff)>.001)dc=`<td class="num ${diff>0?'diff-up':'diff-down'}">${diff>0?'+':''}${fmt(diff)}%</td>`;
     tbody.insertAdjacentHTML('beforeend',`<tr class="${cls}">
       <td><div class="ticker">${s.symbol}</div></td>
-      <td class="num">${s.rank!==null?s.rank:'—'}</td>
       <td class="num"><div class="wbw"><div class="wbb"><div class="wbf" style="width:${Math.min(100,(s.alloc||0)*2)}%"></div></div><span class="wv">${s.alloc!==null?fmt(s.alloc)+'%':'—'}</span></div></td>
       <td class="num bv">${s.fixBand!==null?'±'+s.fixBand+'%':'—'}</td>
       ${dc}
     </tr>`);
   }
-  tfoot.innerHTML=`<tr class="tfoot-row"><td>TOTAL</td><td></td><td class="num ${Math.abs(total-100)<.01?'tok':'twarn'}">${fmt(total)}%</td><td></td><td></td></tr>`;
-  document.getElementById('prop-count').textContent=changeLog.length+' change'+(changeLog.length===1?'':'s');
+  tfoot.innerHTML=`<tr class="tfoot-row"><td>TOTAL</td><td class="num ${Math.abs(total-100)<.01?'tok':'twarn'}">${fmt(total)}%</td><td></td><td class="equiv-col"></td></tr>`;
 }
+
 
 function renderCards(){
   const m=models[activeId];const C=m.C;
   const total=curPrimaries.reduce((a,s)=>a+(s.alloc||0),0);
-  const tlhN=m.rows.filter(r=>String(r[C.equivOf]||'').trim()!=='').length;
+  const equivN=m.rows.filter(r=>String(r[C.equivOf]||'').trim()!=='').length;
   const bands=curPrimaries.filter(s=>s.fixBand!==null).map(s=>s.fixBand);
   const avgB=bands.length?bands.reduce((a,b)=>a+b,0)/bands.length:null;
   document.getElementById('sc-count').textContent=curPrimaries.length;
-  document.getElementById('sc-tlh').textContent=tlhN;
+  document.getElementById('sc-equiv').textContent=equivN;
   document.getElementById('sc-total').textContent=fmt(total)+'%';
   document.getElementById('sc-total').className='cval '+(Math.abs(total-100)<.01?'ok':'warn');
   document.getElementById('sc-note').textContent=Math.abs(total-100)<.01?'balanced ✓':fmt(Math.abs(total-100))+'% off';
@@ -490,8 +559,15 @@ function renderCards(){
 
 function renderLog(){
   const el=document.getElementById('clist');
-  if(!changeLog.length){el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:5px 0;">No changes yet — use the actions below.</div>';return;}
+  if(!changeLog.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:5px 0;">No changes yet.</div>';
+    const badge=document.getElementById('pending-count-badge');
+    if(badge) badge.textContent='';
+    return;
+  }
   el.innerHTML=changeLog.map(c=>`<div class="citem ${c.type}"><span class="ctype">${c.type.toUpperCase()}</span><span class="cdesc">${c.desc}</span></div>`).join('');
+  const badge=document.getElementById('pending-count-badge');
+  if(badge) badge.textContent='('+changeLog.length+')';
 }
 
 function populateSels(){
@@ -555,7 +631,7 @@ function applyAdd(){
   if(C.sellPri) tmpl[C.sellPri]=sellPri;
   Object.keys(tmpl).forEach(k=>{
     const lk=k.toLowerCase();
-    if(lk.includes('alternate')||lk.startsWith('t -')||lk.startsWith('td -')||lk.startsWith('te -')||lk.includes('tlh symbol'))
+    if(lk.includes('alternate')||lk.startsWith('t -')||lk.startsWith('td -')||lk.startsWith('te -')||lk.includes('equiv symbol'))
       tmpl[k]='';
   });
 
@@ -570,7 +646,7 @@ function applyRemove(){
   const idx=propPrimaries.findIndex(s=>s.symbol===sym);
   if(idx<0)return;
   propPrimaries.splice(idx,1);
-  changeLog.push({type:'rem',desc:`Removed <strong>${sym}</strong> (and its TLH alternates)`});
+  changeLog.push({type:'rem',desc:`Removed <strong>${sym}</strong> (and its equivalents)`});
   afterChange();
 }
 
@@ -601,7 +677,18 @@ document.getElementById('swap-inherit').addEventListener('change',function(){
   document.getElementById('swap-override').style.display=this.value==='no'?'grid':'none';
 });
 
-function afterChange(){renderProp();renderLog();populateSels();}
+function afterChange(){
+  renderLog();
+  populateSels();
+  // Show/hide pending log section
+  const hasCh = changeLog.length > 0;
+  document.getElementById('pending-log-wrap').style.display = hasCh ? 'block' : 'none';
+  document.getElementById('apply-bar').style.display = hasCh ? 'block' : 'none';
+  const sub = document.getElementById('apply-sub');
+  if(sub) sub.textContent = changeLog.length + ' pending change' + (changeLog.length===1?'':'s') + ' — click to update the proposed model';
+  // Update pane badge
+  document.getElementById('prop-count').textContent = changeLog.length + ' pending';
+}
 
 // ── EXPORT ──
 function exportXlsx(){
@@ -632,7 +719,7 @@ function exportXlsx(){
     if(C.sellPri) prow[C.sellPri]=proposed.sellPri||'Default';
     out.push(prow);
 
-    // Emit TLH alts only if this symbol existed in original model
+    // Emit Equiv alts only if this symbol existed in original model
     if(origEntry){
       const alts=m.rows.filter(r=>String(r[C.equivOf]||'').trim().toUpperCase()===origEntry.symbol);
       alts.forEach(altRow=>{
@@ -688,30 +775,148 @@ function resetAll(){
   document.getElementById('prop-panel').style.display='none';
   document.getElementById('mselwrap').style.display='none';
   document.getElementById('export-btn').disabled=true;
-  document.getElementById('finput').value='';
+  document.getElementById('cur-tbody').innerHTML='';
+  document.getElementById('cur-tfoot').innerHTML='';
+  document.getElementById('prop-tbody').innerHTML='';
+  document.getElementById('prop-tfoot').innerHTML='';
+  document.getElementById('clist').innerHTML='<div style="font-size:11px;color:var(--text3);padding:5px 0;">No changes yet.</div>';
+  // Replace file input so same file can be re-selected
+  const old=document.getElementById('finput');
+  const fresh=document.createElement('input');
+  fresh.type='file';fresh.id='finput';fresh.accept='.xlsx,.xls,.csv';
+  fresh.onchange=handleFile;
+  old.parentNode.replaceChild(fresh,old);
 }
 
-// ── DEMO ──
-function loadSample(){
-  const rows=[
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'PEP','Rank':1,'Allocation %':1,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'PEP','Dynamic':0,'Description':'','Symbol':'KO','Rank':'','Allocation %':'','Range':'','Fix Band %':'','Lower Tol %':'','Upper Tol %':'','Buy Priority':'Do Not Buy','Sell Priority':'Sell If No Gain'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'PEP','Dynamic':0,'Description':'','Symbol':'IYK','Rank':'','Allocation %':'','Range':'','Fix Band %':'','Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'JPM','Rank':3,'Allocation %':3,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'JPM','Dynamic':0,'Description':'','Symbol':'COF','Rank':'','Allocation %':'','Range':'','Fix Band %':'','Lower Tol %':'','Upper Tol %':'','Buy Priority':'Do Not Buy','Sell Priority':'Sell If No Gain'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'EPD','Rank':4.75,'Allocation %':4.75,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'EPD','Dynamic':0,'Description':'','Symbol':'KMI','Rank':'','Allocation %':'','Range':'','Fix Band %':'','Lower Tol %':'','Upper Tol %':'','Buy Priority':'Do Not Buy','Sell Priority':'Sell If No Gain'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'MINT','Rank':4.5,'Allocation %':4.5,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Hard To Buy','Sell Priority':'Priority Sell'},
-    {'Security Set ID':2,'Name':'White Oak Dividend','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'MINT','Dynamic':0,'Description':'','Symbol':'SWVXX','Rank':'','Allocation %':'','Range':'','Fix Band %':'','Lower Tol %':'','Upper Tol %':'','Buy Priority':'Do Not Buy','Sell Priority':'Priority Sell'},
-    {'Security Set ID':3,'Name':'White Oak Core','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'MSFT','Rank':5,'Allocation %':5,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':3,'Name':'White Oak Core','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'GOOGL','Rank':6,'Allocation %':6,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':3,'Name':'White Oak Core','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'GOOGL','Dynamic':0,'Description':'','Symbol':'GOOG','Rank':'','Allocation %':'','Range':'','Fix Band %':'','Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-    {'Security Set ID':3,'Name':'White Oak Core','Team ID':'','Security Set Do Not TLH':'false','Security Do Not TLH':'false','Equivalent Of(symbol)':'','Dynamic':0,'Description':'','Symbol':'META','Rank':4,'Allocation %':4,'Range':'','Fix Band %':20,'Lower Tol %':'','Upper Tol %':'','Buy Priority':'Default','Sell Priority':'Default'},
-  ];
-  origFileName='sample_SecuritySetDetail.xlsx';
-  parseFile(rows);
+
+// ── APPLY CHANGES ──
+function applyChanges(){
+  if(!changeLog.length){ showToast('No pending changes to apply','err'); return; }
+  // The propPrimaries are already updated in real-time, just render them and update UI state
+  renderProp();
+  // Update proposed state badge
+  const badge = document.getElementById('proposed-state-badge');
+  if(badge){
+    badge.textContent = changeLog.length + ' change' + (changeLog.length===1?'':'s') + ' applied';
+    badge.style.color = 'var(--accent2)';
+    badge.style.fontWeight = '700';
+  }
+  // Hide apply bar, hide pending log
+  document.getElementById('apply-bar').style.display='none';
+  document.getElementById('pending-log-wrap').style.display='none';
+  // Update pane badge
+  document.getElementById('prop-count').textContent = changeLog.length + ' change'+(changeLog.length===1?'':'s')+' applied';
+  showToast('Proposed model updated — review below, then export or print','ok');
+  // Scroll to proposed section
+  document.getElementById('proposed-section').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
+function clearAllChanges(){
+  if(!changeLog.length) return;
+  propPrimaries = JSON.parse(JSON.stringify(curPrimaries));
+  changeLog = [];
+  renderProp();
+  renderLog();
+  populateSels();
+  document.getElementById('pending-log-wrap').style.display='none';
+  document.getElementById('apply-bar').style.display='none';
+  document.getElementById('prop-count').textContent='0 changes';
+  const badge = document.getElementById('proposed-state-badge');
+  if(badge){ badge.textContent='matches current'; badge.style.color='var(--text3)'; badge.style.fontWeight='400'; }
+  showToast('All changes cleared','ok');
+}
+
+function printProposed(){
+  // Build a print-friendly page in a new window
+  const m = models[activeId];
+  const rows = propPrimaries;
+  const curMap = {};
+  curPrimaries.forEach(s=>{ curMap[s.symbol]=s; });
+
+  const tableRows = rows.map(s=>{
+    const orig = curMap[s.symbol];
+    const isNew = !orig;
+    const diff = orig ? (s.alloc||0)-(orig.alloc||0) : null;
+    let diffStr = '—';
+    if(isNew) diffStr = 'NEW';
+    else if(diff!==null && Math.abs(diff)>0.001) diffStr = (diff>0?'+':'')+fmt(diff)+'%';
+    const rowStyle = isNew ? 'background:#e8f0ff' : (diff!==null&&Math.abs(diff)>0.001) ? 'background:#fffbe6' : '';
+    return `<tr style="${rowStyle}">
+      <td style="font-weight:700">${s.symbol}</td>
+      <td style="text-align:right">${s.alloc!==null?fmt(s.alloc)+'%':'—'}</td>
+      <td style="text-align:right">${s.fixBand!==null?'±'+s.fixBand+'%':'—'}</td>
+      <td style="text-align:right;color:${isNew?'#1a3a5c':(diff>0?'#1a7a4c':(diff<0?'#8b1a2a':'#888'))}">${diffStr}</td>
+    </tr>`;
+  }).join('');
+
+  const total = rows.reduce((a,s)=>a+(s.alloc||0),0);
+  const totalColor = Math.abs(total-100)<0.01 ? '#1a7a4c' : '#b05c00';
+
+  const changes = changeLog.map((c,i)=>
+    `<tr><td>${i+1}</td><td>${c.type.toUpperCase()}</td><td>${c.desc.replace(/<[^>]+>/g,'')}</td></tr>`
+  ).join('');
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <title>White Oak Model Tool — ${m.name} Proposed</title>
+  <style>
+    body { font-family: Georgia, serif; font-size: 13px; color: #1a1a2e; margin: 40px; }
+    h1 { font-size: 22px; color: #1a3a5c; margin-bottom: 4px; }
+    .sub { color: #666; font-size: 12px; margin-bottom: 24px; }
+    h2 { font-size: 14px; color: #1a3a5c; border-bottom: 2px solid #c9a84c; padding-bottom: 4px; margin: 24px 0 10px; }
+    table { width: 100%; border-collapse: collapse; font-family: 'Courier New', monospace; font-size: 12px; }
+    th { background: #1a3a5c; color: white; padding: 8px 12px; text-align: left; font-family: Georgia, serif; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+    td { padding: 7px 12px; border-bottom: 1px solid #e0ddd5; }
+    td:nth-child(2),td:nth-child(3),td:nth-child(4){ text-align: right; }
+    .total-row td { font-weight: 700; border-top: 2px solid #1a3a5c; }
+    .change-table td { font-size: 11px; }
+    .footer { margin-top: 32px; font-size: 10px; color: #999; border-top: 1px solid #e0ddd5; padding-top: 8px; }
+    @media print { button { display: none; } }
+  </style>
+  </head><body>
+  <h1>White Oak Model Tool</h1>
+  <div class="sub">
+    <strong>${m.name}</strong> &nbsp;·&nbsp; Proposed Model &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}
+  </div>
+  <button onclick="window.print()" style="background:#1a3a5c;color:white;border:none;padding:8px 20px;border-radius:5px;cursor:pointer;font-size:12px;margin-bottom:20px;">Print / Save as PDF</button>
+
+  <h2>Proposed Holdings</h2>
+  <table>
+    <thead><tr><th>Symbol</th><th>Alloc %</th><th>Fix Band</th><th>Δ vs Current</th></tr></thead>
+    <tbody>${tableRows}</tbody>
+    <tfoot><tr class="total-row">
+      <td>TOTAL</td>
+      <td style="text-align:right;color:${totalColor}">${fmt(total)}%</td>
+      <td></td><td></td>
+    </tr></tfoot>
+  </table>
+
+  ${changeLog.length ? `<h2>Changes Applied</h2>
+  <table class="change-table">
+    <thead><tr><th>#</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>${changes}</tbody>
+  </table>` : ''}
+
+  <div class="footer">White Oak Wealth Partners &nbsp;·&nbsp; White Oak Model Tool &nbsp;·&nbsp; For internal use only</div>
+  </body></html>`);
+  win.document.close();
+}
+
+// ── EQUIV TOGGLE ──
+let equivVisible = true;
+function toggleEquiv() {
+  equivVisible = !equivVisible;
+  const tbl = document.getElementById('cur-tbody').closest('table');
+  if (equivVisible) {
+    tbl.classList.remove('equiv-hidden');
+    document.getElementById('equiv-toggle-icon').textContent = '▾';
+    document.getElementById('equiv-th').title = 'Click to hide equivalents';
+  } else {
+    tbl.classList.add('equiv-hidden');
+    document.getElementById('equiv-toggle-icon').textContent = '▸';
+    document.getElementById('equiv-th').title = 'Click to show equivalents';
+  }
+}
 
 </script>
 </body>
