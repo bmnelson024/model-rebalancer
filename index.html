@@ -162,6 +162,11 @@
     .wv { display: inline !important; }
   }
   .print-header { display: none; margin-bottom: 20px; }
+
+  /* Hide number input spinners */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
   @media(max-width:900px){.app{grid-template-columns:1fr;}.pane{border-right:none;border-bottom:1px solid var(--border);}.sgrid{grid-template-columns:repeat(2,1fr);}}
 </style>
 </head>
@@ -211,7 +216,7 @@
         <div class="twrap">
           <table>
             <thead><tr>
-              <th>Symbol</th><th>Alloc %</th><th>Fix Band %</th><th id="equiv-th" onclick="toggleEquiv()" style="cursor:pointer;user-select:none;">Equivalents <span id="equiv-toggle-icon">▾</span></th>
+              <th>Symbol</th><th>Alloc %</th><th>Fix Band %</th><th id="equiv-th" onclick="toggleEquiv()" style="cursor:pointer;user-select:none;">Equivalents <span id="equiv-toggle-icon">▸</span></th>
             </tr></thead>
             <tbody id="cur-tbody"></tbody>
             <tfoot id="cur-tfoot"></tfoot>
@@ -378,6 +383,59 @@
   </div>
 </div>
 
+<!-- COMPARISON MODAL -->
+<div id="compare-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,18,26,0.55);z-index:300;overflow-y:auto;padding:32px 16px;">
+  <div id="compare-modal" style="background:#fff;border-radius:10px;max-width:860px;margin:0 auto;box-shadow:0 12px 48px rgba(0,0,0,0.18);overflow:hidden;">
+
+    <!-- Modal header -->
+    <div style="background:#1a3a5c;padding:18px 24px;display:flex;align-items:center;gap:12px;">
+      <div>
+        <div style="font-family:Georgia,serif;font-size:16px;font-weight:700;color:#fff;letter-spacing:0.3px;">Review Changes</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;font-family:'DM Mono',monospace;" id="compare-subtitle"></div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn sm" onclick="closeCompare()" style="border-color:rgba(255,255,255,0.3);color:rgba(255,255,255,0.7);">Cancel</button>
+        <button onclick="confirmApply()" style="background:#c9a84c;border:none;border-radius:5px;color:#1a1a2e;font-family:Georgia,serif;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;padding:7px 18px;cursor:pointer;">
+          Confirm &amp; Apply →
+        </button>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div style="padding:10px 24px;background:#f7f5f0;border-bottom:1px solid #e0ddd5;display:flex;gap:20px;flex-wrap:wrap;">
+      <span style="font-size:10px;font-family:'DM Mono',monospace;color:#4a4a6a;display:flex;align-items:center;gap:6px;">
+        <span style="display:inline-block;width:12px;height:12px;border-left:3px solid #c9a84c;background:rgba(201,168,76,0.08);border-radius:2px;"></span> Modified
+      </span>
+      <span style="font-size:10px;font-family:'DM Mono',monospace;color:#4a4a6a;display:flex;align-items:center;gap:6px;">
+        <span style="display:inline-block;width:12px;height:12px;border-left:3px solid #1a3a5c;background:rgba(26,58,92,0.07);border-radius:2px;"></span> Added
+      </span>
+      <span style="font-size:10px;font-family:'DM Mono',monospace;color:#4a4a6a;display:flex;align-items:center;gap:6px;">
+        <span style="display:inline-block;width:12px;height:12px;border-left:3px solid #b03040;background:rgba(176,48,64,0.07);border-radius:2px;"></span> Removed
+      </span>
+    </div>
+
+    <!-- Comparison table -->
+    <div style="overflow-x:auto;">
+      <table id="compare-table" style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:12px;">
+        <thead>
+          <tr style="background:#f0ede6;">
+            <th style="padding:9px 16px;text-align:left;font-family:Georgia,serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8aaa;border-bottom:1px solid #ddd8cc;width:18%">Symbol</th>
+            <th style="padding:9px 16px;text-align:right;font-family:Georgia,serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8aaa;border-bottom:1px solid #ddd8cc;width:16%">Current Alloc</th>
+            <th style="padding:9px 16px;text-align:right;font-family:Georgia,serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8aaa;border-bottom:1px solid #ddd8cc;width:16%">Proposed Alloc</th>
+            <th style="padding:9px 16px;text-align:right;font-family:Georgia,serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8aaa;border-bottom:1px solid #ddd8cc;width:14%">Change</th>
+            <th style="padding:9px 16px;text-align:right;font-family:Georgia,serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8aaa;border-bottom:1px solid #ddd8cc;width:16%">Current Band</th>
+            <th style="padding:9px 16px;text-align:right;font-family:Georgia,serif;font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a8aaa;border-bottom:1px solid #ddd8cc;width:16%">Proposed Band</th>
+          </tr>
+        </thead>
+        <tbody id="compare-tbody"></tbody>
+        <tfoot id="compare-tfoot"></tfoot>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -486,6 +544,9 @@ function loadModel(){
   propPrimaries=JSON.parse(JSON.stringify(curPrimaries));
   changeLog=[];
   renderAll();
+  // Default equivalents column to collapsed
+  const curTable = document.querySelector('#cur-tbl-wrap table');
+  if(curTable) curTable.classList.add('equiv-hidden');
   document.getElementById('upload-zone').style.display='none';
   document.getElementById('scards').style.display='grid';
   document.getElementById('cur-tbl-wrap').style.display='block';
@@ -878,7 +939,8 @@ function applyChanges(){
     return;
   }
 
-  commitChanges();
+  // Show comparison modal before committing
+  showCompareModal();
 }
 
 function showAllocationWarning(proposedTotal){
@@ -1037,8 +1099,128 @@ function printProposed(){
   win.document.close();
 }
 
+// ── COMPARISON MODAL ──
+function showCompareModal(){
+  const curMap = {};
+  curPrimaries.forEach(s=>{ curMap[s.symbol]=s; });
+  const propMap = {};
+  propPrimaries.forEach(s=>{ propMap[s.symbol]=s; });
+
+  // Build unified list: all proposed + any removed
+  const allSymbols = [];
+  // proposed (sorted by proposed alloc desc)
+  const sorted = [...propPrimaries].sort((a,b)=>(b.alloc||0)-(a.alloc||0));
+  sorted.forEach(s=>allSymbols.push({symbol:s.symbol, status:'prop'}));
+  // removed (in current but not proposed)
+  curPrimaries.forEach(s=>{
+    if(!propMap[s.symbol]) allSymbols.push({symbol:s.symbol, status:'removed'});
+  });
+
+  const tbody = document.getElementById('compare-tbody');
+  const tfoot = document.getElementById('compare-tfoot');
+  tbody.innerHTML = '';
+
+  let curTotal = 0, propTotal = 0;
+
+  allSymbols.forEach(({symbol, status})=>{
+    const cur = curMap[symbol];
+    const prop = propMap[symbol];
+    const isNew     = !cur && !!prop;
+    const isRemoved = !!cur && !prop;
+    const isModified = cur && prop && (cur.alloc !== prop.alloc || cur.fixBand !== prop.fixBand);
+
+    curTotal  += cur  ? (cur.alloc||0)  : 0;
+    propTotal += prop ? (prop.alloc||0) : 0;
+
+    const allocChanged = cur && prop && cur.alloc !== prop.alloc;
+    const bandChanged  = cur && prop && cur.fixBand !== prop.fixBand;
+    const allocDiff    = cur && prop ? (prop.alloc||0) - (cur.alloc||0) : null;
+
+    // Row style
+    let rowBorder = 'border-left:3px solid transparent';
+    let rowBg = '';
+    if(isNew)      { rowBorder='border-left:3px solid #1a3a5c'; rowBg='background:rgba(26,58,92,0.05)'; }
+    else if(isRemoved){ rowBorder='border-left:3px solid #b03040'; rowBg='background:rgba(176,48,64,0.05)'; }
+    else if(isModified){ rowBorder='border-left:3px solid #c9a84c'; rowBg='background:rgba(201,168,76,0.06)'; }
+
+    // Symbol cell
+    let symStyle = 'font-family:Georgia,serif;font-weight:700;font-size:13px;';
+    let symLabel = symbol;
+    if(isNew)       symStyle += 'color:#1a3a5c;';
+    else if(isRemoved){ symStyle += 'color:#b03040;text-decoration:line-through;'; }
+    else if(isModified) symStyle += 'color:#1a1a2e;';
+
+    // Alloc cells
+    const curAllocStr  = cur  ? fmt(cur.alloc||0)+'%'  : '—';
+    const propAllocStr = prop ? fmt(prop.alloc||0)+'%' : '—';
+    const curAllocStyle  = allocChanged ? 'color:#8a8aaa;' : '';
+    const propAllocStyle = allocChanged ? 'font-weight:700;color:#1a3a5c;' : '';
+
+    // Delta cell
+    let deltaHtml = '<td style="text-align:right;padding:9px 16px;">—</td>';
+    if(isNew)      deltaHtml = `<td style="text-align:right;padding:9px 16px;font-weight:700;color:#1a3a5c;">NEW</td>`;
+    else if(isRemoved) deltaHtml = `<td style="text-align:right;padding:9px 16px;font-weight:700;color:#b03040;">REMOVED</td>`;
+    else if(allocDiff !== null && Math.abs(allocDiff)>0.001){
+      const sign = allocDiff > 0 ? '+' : '';
+      const col  = allocDiff > 0 ? '#1a7a4c' : '#b03040';
+      deltaHtml = `<td style="text-align:right;padding:9px 16px;font-weight:700;color:${col};">${sign}${fmt(allocDiff)}%</td>`;
+    }
+
+    // Band cells
+    const curBandStr  = cur  && cur.fixBand  !== null ? '±'+cur.fixBand+'%'  : '—';
+    const propBandStr = prop && prop.fixBand !== null ? '±'+prop.fixBand+'%' : '—';
+    const curBandStyle  = bandChanged ? 'color:#8a8aaa;' : '';
+    const propBandStyle = bandChanged ? 'font-weight:700;color:#1a3a5c;' : '';
+
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr style="${rowBg};${rowBorder};border-bottom:1px solid #e8e5de;">
+        <td style="padding:9px 16px;${rowBorder}"><span style="${symStyle}">${symLabel}</span></td>
+        <td style="text-align:right;padding:9px 16px;${curAllocStyle}">${curAllocStr}</td>
+        <td style="text-align:right;padding:9px 16px;${propAllocStyle}">${propAllocStr}</td>
+        ${deltaHtml}
+        <td style="text-align:right;padding:9px 16px;${curBandStyle}">${curBandStr}</td>
+        <td style="text-align:right;padding:9px 16px;${propBandStyle}">${propBandStr}</td>
+      </tr>`);
+  });
+
+  // Totals row
+  const totalOk = Math.abs(propTotal-100)<0.01;
+  tfoot.innerHTML = `<tr style="background:#f0ede6;font-family:Georgia,serif;font-weight:700;">
+    <td style="padding:10px 16px;font-size:12px;">TOTAL</td>
+    <td style="text-align:right;padding:10px 16px;color:#8a8aaa;">${fmt(curTotal)}%</td>
+    <td style="text-align:right;padding:10px 16px;color:${totalOk?'#1a7a4c':'#b03040'};font-size:13px;">${fmt(propTotal)}%</td>
+    <td style="text-align:right;padding:10px 16px;"></td>
+    <td style="text-align:right;padding:10px 16px;"></td>
+    <td style="text-align:right;padding:10px 16px;"></td>
+  </tr>`;
+
+  // Subtitle
+  const nChanged = changeLog.length;
+  document.getElementById('compare-subtitle').textContent =
+    nChanged + ' change' + (nChanged===1?'':'s') + ' pending — review before confirming';
+
+  document.getElementById('compare-overlay').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCompare(){
+  document.getElementById('compare-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function confirmApply(){
+  closeCompare();
+  commitChanges();
+}
+
+// Close on overlay click
+document.getElementById('compare-overlay').addEventListener('click', function(e){
+  if(e.target === this) closeCompare();
+});
+
+
 // ── EQUIV TOGGLE ──
-let equivVisible = true;
+let equivVisible = false;
 function toggleEquiv() {
   equivVisible = !equivVisible;
   const tbl = document.getElementById('cur-tbody').closest('table');
