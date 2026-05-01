@@ -373,7 +373,8 @@ function parseFile(rows){
   };
 
   // Debug: log detected columns to console
-  console.log('Detected columns:', C);
+  console.log('Column map:');
+  Object.entries(C).forEach(([k,v])=>console.log(' ',k,'->',v));
 
   for(const row of rows){
     const id=String(row[C.setId]||'').trim();
@@ -404,7 +405,12 @@ function pn(v){if(v===''||v===null||v===undefined)return null;const n=parseFloat
 function loadModel(){
   const m=models[activeId]; const C=m.C;
   curPrimaries=m.rows
-    .filter(r=>!String(r[C.equivOf]||'').trim())
+    .filter(r=>{
+      const equivOf=String(r[C.equivOf]||'').trim();
+      const alloc=String(r[C.alloc]||'').trim();
+      // Primary = no TLH equivalent AND has an allocation value
+      return !equivOf && alloc !== '' && alloc !== null;
+    })
     .map(r=>({_raw:r,symbol:String(r[C.symbol]||'').trim().toUpperCase(),rank:pn(r[C.rank]),alloc:pn(r[C.alloc]),fixBand:pn(r[C.fixBand]),buyPri:String(r[C.buyPri]||'Default').trim(),sellPri:String(r[C.sellPri]||'Default').trim()}))
     .filter(r=>r.symbol);
   propPrimaries=JSON.parse(JSON.stringify(curPrimaries));
@@ -438,7 +444,7 @@ function renderCur(){
       <td class="tlh-alts">${altStr?'↔ '+altStr:''}</td>
     </tr>`);
   }
-  const tlhN=models[activeId].rows.filter(r=>String(r[models[activeId].C.equivOf]||'').trim()).length;
+  const tlhN=models[activeId].rows.filter(r=>String(r[models[activeId].C.equivOf]||'').trim()!=='').length;
   document.getElementById('cur-count').textContent=curPrimaries.length+' primaries, '+tlhN+' TLH';
   tfoot.innerHTML=`<tr class="tfoot-row"><td>TOTAL</td><td></td><td class="num ${Math.abs(total-100)<.01?'tok':'twarn'}">${fmt(total)}%</td><td></td><td></td></tr>`;
 }
@@ -471,7 +477,7 @@ function renderProp(){
 function renderCards(){
   const m=models[activeId];const C=m.C;
   const total=curPrimaries.reduce((a,s)=>a+(s.alloc||0),0);
-  const tlhN=m.rows.filter(r=>String(r[C.equivOf]||'').trim()).length;
+  const tlhN=m.rows.filter(r=>String(r[C.equivOf]||'').trim()!=='').length;
   const bands=curPrimaries.filter(s=>s.fixBand!==null).map(s=>s.fixBand);
   const avgB=bands.length?bands.reduce((a,b)=>a+b,0)/bands.length:null;
   document.getElementById('sc-count').textContent=curPrimaries.length;
@@ -706,8 +712,7 @@ function loadSample(){
   parseFile(rows);
 }
 
-document.querySelector('.upload-zone').insertAdjacentHTML('afterend',
-  '<button onclick="loadSample()" style="display:block;margin:7px auto 0;background:none;border:1px dashed var(--border2);border-radius:5px;color:var(--text3);cursor:pointer;font-family:var(--mono);font-size:11px;padding:6px 18px;transition:all .15s" onmouseover="this.style.borderColor=\'var(--accent)\';this.style.color=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border2)\';this.style.color=\'var(--text3)\'">▶ Load sample data to explore</button>');
+
 </script>
 </body>
 </html>
