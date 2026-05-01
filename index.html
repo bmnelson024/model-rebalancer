@@ -343,27 +343,37 @@ function parseFile(rows){
   rawRows=rows; models={}; modelIds=[];
 
   const keys=Object.keys(rows[0]);
+
+  // Exact-match first, then fuzzy contains — avoids 'name' matching 'Alternate Custodian 1' etc.
   const col=(...names)=>{
     for(const n of names){
-      const k=keys.find(k=>k.toLowerCase().replace(/[\s_\-()]/g,'').includes(n.toLowerCase().replace(/[\s_\-()]/g,'')));
+      const needle=n.toLowerCase().replace(/[\s_\-%()]/g,'');
+      // 1. Try exact match after stripping
+      let k=keys.find(k=>k.toLowerCase().replace(/[\s_\-%()]/g,'')=== needle);
+      if(k!==undefined)return k;
+      // 2. Try starts-with
+      k=keys.find(k=>k.toLowerCase().replace(/[\s_\-%()]/g,'').startsWith(needle));
       if(k!==undefined)return k;
     }
     return null;
   };
 
   const C={
-    setId:   col('securitysetid','setid'),
-    setName: col('name','setname','securitysetname'),
-    symbol:  col('symbol','ticker'),
-    equivOf: col('equivalentofsymbol','equivalentof','equiv','tlh'),
-    rank:    col('rank','priority'),
-    alloc:   col('allocation%','allocationpct','allocation','alloc'),
-    fixBand: col('fixband%','fixband','band','tolerance'),
-    lowerTol:col('lowertol%','lowertol','lower%'),
-    upperTol:col('uppertol%','uppertol','upper%'),
-    buyPri:  col('buypriority','buy'),
-    sellPri: col('sellpriority','sell'),
+    setId:   col('SecuritySetID','setid'),
+    setName: col('Name','setname','securitysetname'),
+    symbol:  col('Symbol','ticker'),
+    equivOf: col('EquivalentOfsymbol','EquivalentOf','equiv'),
+    rank:    col('Rank','priority'),
+    alloc:   col('Allocation%','AllocationPct','Allocation'),
+    fixBand: col('FixBand%','FixBand','tolerance'),
+    lowerTol:col('LowerTol%','LowerTol'),
+    upperTol:col('UpperTol%','UpperTol'),
+    buyPri:  col('BuyPriority'),
+    sellPri: col('SellPriority'),
   };
+
+  // Debug: log detected columns to console
+  console.log('Detected columns:', C);
 
   for(const row of rows){
     const id=String(row[C.setId]||'').trim();
