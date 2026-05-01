@@ -710,9 +710,9 @@ function afterChange(){
 
 // ── EXPORT ──
 function exportXlsx(){
-  const total = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
-  if(Math.abs(total-100)>0.001){
-    showToast('Cannot export — total allocation is '+fmt(total)+'%, must be 100%','err');
+  const exportTotal = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
+  if(Math.abs(exportTotal-100)>0.001){
+    showToast('Cannot export — total allocation is '+fmt(exportTotal)+'%, must be 100%','err');
     return;
   }
   const m=models[activeId];const C=m.C;
@@ -957,9 +957,9 @@ function clearAllChanges(){
 }
 
 function printProposed(){
-  const total = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
-  if(Math.abs(total-100)>0.001){
-    showToast('Cannot print — total allocation is '+fmt(total)+'%, must be 100%','err');
+  const printTotal = propPrimaries.reduce((a,s)=>a+(s.alloc||0), 0);
+  if(Math.abs(printTotal-100)>0.001){
+    showToast('Cannot print — total allocation is '+fmt(printTotal)+'%, must be 100%','err');
     return;
   }
   // Build a print-friendly page in a new window
