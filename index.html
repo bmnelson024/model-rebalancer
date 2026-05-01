@@ -498,9 +498,7 @@ function parseFile(rows){
     sellPri: col('SellPriority'),
   };
 
-  // Debug: log detected columns to console
-  console.log('Column map:');
-  Object.entries(C).forEach(([k,v])=>console.log(' ',k,'->',v));
+
 
   for(const row of rows){
     const id=String(row[C.setId]||'').trim();
