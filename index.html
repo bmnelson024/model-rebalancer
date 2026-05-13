@@ -163,6 +163,25 @@
   }
   .print-header { display: none; margin-bottom: 20px; }
 
+
+  /* Sort buttons */
+  .sort-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text3);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    transition: all .15s;
+  }
+  .sort-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .sort-btn.active { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); font-weight: 700; }
+
+  /* Picklist search selects */
+  select[size] { min-height: 80px; padding: 4px; }
+  select[size] option { padding: 4px 8px; border-radius: 3px; }
   /* Hide number input spinners */
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
@@ -213,6 +232,20 @@
       </div>
 
       <div id="cur-tbl-wrap" style="display:none">
+        <!-- Sort controls -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-size:9px;font-family:Georgia,serif;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);">Sort</span>
+          <button class="sort-btn active" data-sort="alloc-desc" onclick="setSort('alloc-desc')">Alloc ↓</button>
+          <button class="sort-btn" data-sort="alloc-asc" onclick="setSort('alloc-asc')">Alloc ↑</button>
+          <button class="sort-btn" data-sort="sym-asc" onclick="setSort('sym-asc')">A → Z</button>
+          <button class="sort-btn" data-sort="sym-desc" onclick="setSort('sym-desc')">Z → A</button>
+          <div style="margin-left:auto;position:relative;">
+            <input type="text" id="cur-search" placeholder="Search symbol…"
+              oninput="renderCur()"
+              style="padding:5px 10px 5px 28px;font-size:11px;width:140px;border-radius:5px;">
+            <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;pointer-events:none;">⌕</span>
+          </div>
+        </div>
         <div class="twrap">
           <table>
             <thead><tr>
@@ -255,7 +288,11 @@
         <!-- ADJUST ALLOCATION -->
         <div class="aform" id="action-adjust">
           <div class="fg">
-            <div class="frow"><label>Primary Security</label><select id="adj-ticker"></select></div>
+            <div class="frow">
+                <label>Primary Security</label>
+                <input type="text" id="adj-search" placeholder="Search symbol…" oninput="filterSelect('adj-search','adj-ticker')" style="margin-bottom:4px;">
+                <select id="adj-ticker" size="4" style="height:auto;"></select>
+              </div>
             <div class="frow"><label>New Allocation %</label><input type="number" id="adj-val" step="0.01" min="0" max="100" placeholder="e.g. 5.00"></div>
           </div>
           <div class="brow">
@@ -266,15 +303,15 @@
 
         <!-- CHANGE BAND -->
         <div class="aform" id="action-band" style="display:none">
+          <div class="ibanner">Tolerance band changes apply to <strong>all primary holdings</strong> in this model simultaneously.</div>
           <div class="fg">
-            <div class="frow"><label>Primary Security</label><select id="band-ticker"></select></div>
             <div class="frow">
-              <label>New Fix Band %</label>
+              <label>New Fix Band % — All Holdings</label>
               <input type="number" id="band-val" step="0.5" min="0" placeholder="e.g. 20">
-              <span class="inote">Symmetric tolerance — e.g. 20 means ±20% relative to target</span>
+              <span class="inote">Symmetric tolerance applied to every security — e.g. 20 means ±20% relative to target</span>
             </div>
           </div>
-          <div class="brow"><button class="btn primary sm" onclick="applyBand()">Apply</button></div>
+          <div class="brow"><button class="btn primary sm" onclick="applyBand()">Apply to All</button></div>
         </div>
 
         <!-- ADD SECURITY -->
@@ -303,7 +340,8 @@
         <div class="aform" id="action-remove" style="display:none">
           <div class="frow" style="margin-bottom:9px">
             <label>Primary Security to Remove</label>
-            <select id="rem-ticker"></select>
+            <input type="text" id="rem-search" placeholder="Search symbol…" oninput="filterSelect('rem-search','rem-ticker')" style="margin-bottom:4px;">
+            <select id="rem-ticker" size="4" style="height:auto;"></select>
             <span class="inote">All equivalents for this security will also be excluded from the export.</span>
           </div>
           <div class="brow"><button class="btn danger sm" onclick="applyRemove()">Remove</button></div>
@@ -312,7 +350,11 @@
         <!-- SWAP -->
         <div class="aform" id="action-swap" style="display:none">
           <div class="fg">
-            <div class="frow"><label>Replace (Existing Primary)</label><select id="swap-from"></select></div>
+            <div class="frow">
+                <label>Replace (Existing Primary)</label>
+                <input type="text" id="swap-search" placeholder="Search symbol…" oninput="filterSelect('swap-search','swap-from')" style="margin-bottom:4px;">
+                <select id="swap-from" size="4" style="height:auto;"></select>
+              </div>
             <div class="frow"><label>New Symbol</label><input type="text" id="swap-sym" placeholder="e.g. VTI" style="text-transform:uppercase"></div>
           </div>
           <div class="fg">
@@ -521,6 +563,10 @@ function parseFile(rows){
 function switchModel(){
   activeId=document.getElementById('msel').value;
   changeLog=[];
+  currentSort='alloc-desc';
+  document.querySelectorAll('.sort-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.sort==='alloc-desc');
+  });
   loadModel();
 }
 
@@ -537,8 +583,6 @@ function loadModel(){
     })
     .map(r=>({_raw:r,symbol:String(r[C.symbol]||'').trim().toUpperCase(),rank:pn(r[C.rank]),alloc:pn(r[C.alloc]),fixBand:pn(r[C.fixBand]),buyPri:String(r[C.buyPri]||'Default').trim(),sellPri:String(r[C.sellPri]||'Default').trim()}))
     .filter(r=>r.symbol);
-  // Sort by allocation descending
-  curPrimaries.sort((a,b)=>(b.alloc||0)-(a.alloc||0));
   propPrimaries=JSON.parse(JSON.stringify(curPrimaries));
   changeLog=[];
   renderAll();
@@ -561,7 +605,11 @@ function equivFor(sym){const m=models[activeId];const C=m.C;return m.rows.filter
 function renderCur(){
   const tbody=document.getElementById('cur-tbody'),tfoot=document.getElementById('cur-tfoot');
   tbody.innerHTML=''; let total=0;
-  for(const s of curPrimaries){
+  const searchEl = document.getElementById('cur-search');
+  const q = searchEl ? searchEl.value.trim().toUpperCase() : '';
+  const sorted = sortPrimaries(curPrimaries);
+  const visible = q ? sorted.filter(s=>s.symbol.includes(q)) : sorted;
+  for(const s of visible){
     total+=(s.alloc||0);
     const alts=equivFor(s.symbol);
     const altStr=alts.length?alts.map(a=>{const C=models[activeId].C;return String(a[C.symbol]||'').trim();}).join(', '):'';
@@ -641,9 +689,13 @@ function renderLog(){
 
 function populateSels(){
   const tickers=propPrimaries.map(s=>s.symbol);
-  ['adj-ticker','band-ticker','rem-ticker','swap-from'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el)el.innerHTML=tickers.map(t=>`<option value="${t}">${t}</option>`).join('');
+  // Clear search boxes and repopulate dropdowns
+  ['adj','rem','swap'].forEach(prefix=>{
+    const searchEl = document.getElementById(prefix+'-search');
+    if(searchEl) searchEl.value='';
+    const selId = prefix==='swap' ? 'swap-from' : prefix+'-ticker';
+    const el = document.getElementById(selId);
+    if(el) el.innerHTML=tickers.map(t=>`<option value="${t}">${t}</option>`).join('');
   });
 }
 
@@ -667,12 +719,11 @@ function applyAdjust(){
 }
 
 function applyBand(){
-  const sym=document.getElementById('band-ticker').value;
   const val=parseFloat(document.getElementById('band-val').value);
   if(isNaN(val)||val<0){showToast('Enter a valid band value','err');return;}
-  const s=propPrimaries.find(x=>x.symbol===sym);if(!s)return;
-  const old=s.fixBand; s.fixBand=val;
-  changeLog.push({type:'band',_symbol:sym,_band:val,desc:`<strong>${sym}</strong> fix band: ${old}% → ${val}%`});
+  const oldBands=propPrimaries.map(s=>s.fixBand);
+  propPrimaries.forEach(s=>{ s.fixBand=val; });
+  changeLog.push({type:'band',_band:val,_symbols:propPrimaries.map(s=>s.symbol),desc:`Fix band set to <strong>±${val}%</strong> for all ${propPrimaries.length} holdings`});
   document.getElementById('band-val').value='';
   afterChange();
 }
@@ -885,8 +936,8 @@ function removeChange(idx){
       const s = propPrimaries.find(x=>x.symbol===c._symbol);
       if(s) s.alloc = c._alloc;
     } else if(c.type === 'band'){
-      const s = propPrimaries.find(x=>x.symbol===c._symbol);
-      if(s) s.fixBand = c._band;
+      // Band changes apply to all holdings
+      propPrimaries.forEach(s=>{ s.fixBand = c._band; });
     } else if(c.type === 'add'){
       if(!propPrimaries.find(x=>x.symbol===c._symbol)){
         propPrimaries.push(c._entry);
@@ -1215,6 +1266,38 @@ function confirmApply(){
 document.getElementById('compare-overlay').addEventListener('click', function(e){
   if(e.target === this) closeCompare();
 });
+
+
+// ── SORT & SEARCH ──
+let currentSort = 'alloc-desc';
+
+function setSort(mode) {
+  currentSort = mode;
+  document.querySelectorAll('.sort-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sort === mode);
+  });
+  renderCur();
+}
+
+function sortPrimaries(arr) {
+  const a = [...arr];
+  if (currentSort === 'alloc-desc') return a.sort((x,y)=>(y.alloc||0)-(x.alloc||0));
+  if (currentSort === 'alloc-asc')  return a.sort((x,y)=>(x.alloc||0)-(y.alloc||0));
+  if (currentSort === 'sym-asc')    return a.sort((x,y)=>x.symbol.localeCompare(y.symbol));
+  if (currentSort === 'sym-desc')   return a.sort((x,y)=>y.symbol.localeCompare(x.symbol));
+  return a;
+}
+
+function filterSelect(searchId, selectId) {
+  const q = document.getElementById(searchId).value.trim().toUpperCase();
+  const sel = document.getElementById(selectId);
+  const current = sel.value;
+  const tickers = propPrimaries.map(s=>s.symbol);
+  const filtered = q ? tickers.filter(t=>t.includes(q)) : tickers;
+  sel.innerHTML = filtered.map(t=>`<option value="${t}">${t}</option>`).join('');
+  // Restore selection if still in list
+  if (filtered.includes(current)) sel.value = current;
+}
 
 
 // ── EQUIV TOGGLE ──
